@@ -10,6 +10,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { auth, createUserWithEmailAndPassword } from '../../firebase';
+import { Link } from 'react-router-dom';
 
 function SignUp() {
   const [formData, setFormData] = useState({
@@ -144,6 +145,12 @@ function SignUp() {
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign Up'}
           </Button>
+          <Typography variant="body2" align="center" sx={{ mt: 2 }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#4FC3F7', textDecoration: 'underline' }}>
+              Login here
+            </Link>
+          </Typography>
         </form>
       </Box>
     </Container>
