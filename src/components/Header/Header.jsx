@@ -1,17 +1,33 @@
 // src/components/Header.jsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
+import { signOut, getAuth } from 'firebase/auth';
 
-function Header({ isAuthenticated, onLogout }) {
+function Header() {
   const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const auth = getAuth();
+
+  useEffect(() => {
+    // Check if token exists in localStorage
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
+  });
 
   const handleAuthAction = () => {
     if (isAuthenticated) {
-      // Logout
-      onLogout();
+      // Remove token and sign out from Firebase
+      localStorage.removeItem('token');
+      signOut(auth)
+        .then(() => {
+          setIsAuthenticated(false);
+          navigate('/login');
+        })
+        .catch(error => {
+          alert('Logout failed: ' + error.message);
+        });
     } else {
-      // Redirect to Signup/Login page
       navigate('/signup');
     }
   };
