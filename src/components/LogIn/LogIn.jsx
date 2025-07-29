@@ -10,13 +10,15 @@ import {
 } from '@mui/material';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function Login() {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
     });
+
+    const navigate = useNavigate();
 
     const [errors, setErrors] = useState({});
     const [firebaseError, setFirebaseError] = useState('');
@@ -88,6 +90,17 @@ function Login() {
                 <Typography variant="body1">
                     You have successfully logged in.
                 </Typography>
+                <Typography variant="h6" align="center" sx={{ mt: 4 }}>
+                    Your profile is incomplete.
+                </Typography>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    sx={{ mt: 2, mx: "auto", display: "block" }}
+                    onClick={() => navigate("/profile")}
+                >
+                    Complete Now
+                </Button>
             </Container>
         );
     }
