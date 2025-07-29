@@ -64,6 +64,8 @@ function Login() {
             localStorage.setItem('token', idToken);
             setToken(idToken);
 
+            navigate('/email');
+
             console.log('User logged in successfully, token stored.');
 
         } catch (error) {

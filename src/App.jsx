@@ -4,6 +4,7 @@ import SignUp from './components/SignUp/SignUp'
 import LogIn from './components/LogIn/LogIn'
 import Profile from './components/Profile/Profile'
 import { Routes, Route, BrowserRouter } from 'react-router-dom'
+import EmailVerificationBanner from './components/EmailVerification/EmailVerication'
 
 function App() {
 
@@ -15,6 +16,9 @@ function App() {
       </Routes>
       <Routes>
         <Route path="/login" element={<LogIn />} />
+      </Routes>
+      <Routes>
+        <Route path="/email" element={<EmailVerificationBanner />} />
       </Routes>
       <Routes>
         <Route path="/profile" element={<Profile />} />
