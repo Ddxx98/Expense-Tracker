@@ -1,3 +1,4 @@
+// src/components/Login.jsx
 import React, { useState } from 'react';
 import {
   Container,
@@ -24,7 +25,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState(null);
 
-  // Forgot Password state
+  // Forgot Password dialog state
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetError, setResetError] = useState('');
@@ -55,17 +56,28 @@ function Login() {
     if (!validate()) return;
     setLoading(true);
     setFirebaseError('');
+
     try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
         formData.email,
         formData.password
       );
-      const idToken = await userCredential.user.getIdToken();
+
+      const user = userCredential.user;
+      const idToken = await user.getIdToken();
+
       localStorage.setItem('token', idToken);
       setToken(idToken);
-      navigate('/email');
+
       console.log('User logged in successfully, token stored.');
+
+      // Redirect based on email verification status
+      if (user.emailVerified) {
+        navigate('/home'); // Replace '/home' with your actual dashboard/home route
+      } else {
+        navigate('/email'); // Email verification page route
+      }
     } catch (error) {
       console.error(error);
       let message = 'Failed to login. Please try again.';
@@ -109,7 +121,7 @@ function Login() {
     try {
       await sendPasswordResetEmail(auth, resetEmail);
       setResetSuccess(
-        'You would receive a password reset link in your email if the account exists. Open the link and change your password. Now try logging in with the new password.'
+        'If an account with this email exists, a password reset link has been sent. Please check your inbox.'
       );
     } catch (error) {
       let msg = 'Failed to send password reset email.';
@@ -125,6 +137,7 @@ function Login() {
     }
   };
 
+  // If logged in, show a simple welcome message (optional)
   if (token) {
     return (
       <Container maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
@@ -134,17 +147,6 @@ function Login() {
         <Typography variant="body1">
           You have successfully logged in.
         </Typography>
-        <Typography variant="h6" align="center" sx={{ mt: 4 }}>
-          Your profile is incomplete.
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          sx={{ mt: 2, mx: "auto", display: "block" }}
-          onClick={() => navigate("/profile")}
-        >
-          Complete Now
-        </Button>
       </Container>
     );
   }
@@ -226,6 +228,7 @@ function Login() {
           </Typography>
         </form>
       </Box>
+
       {/* Forgot Password Dialog */}
       <Dialog open={forgotOpen} onClose={handleForgotClose}>
         <DialogTitle>Reset Password</DialogTitle>

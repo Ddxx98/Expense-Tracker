@@ -1,4 +1,3 @@
-// src/components/SignUp.jsx
 import React, { useState } from 'react';
 import {
   Container,
@@ -10,7 +9,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { auth, createUserWithEmailAndPassword } from '../../firebase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function SignUp() {
   const [formData, setFormData] = useState({
@@ -18,6 +17,8 @@ function SignUp() {
     password: '',
     confirmPassword: '',
   });
+
+  const navigate = useNavigate();
 
   const [errors, setErrors] = useState({});
   const [firebaseError, setFirebaseError] = useState('');
@@ -64,6 +65,8 @@ function SignUp() {
         formData.password
       );
       console.log('User has successfully signed up', userCredential.user);
+
+      navigate('/email');
 
     } catch (error) {
       console.error(error);

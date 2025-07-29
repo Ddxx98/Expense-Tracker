@@ -5,12 +5,19 @@ import LogIn from './components/LogIn/LogIn'
 import Profile from './components/Profile/Profile'
 import { Routes, Route, BrowserRouter } from 'react-router-dom'
 import EmailVerificationBanner from './components/EmailVerification/EmailVerication'
+import Home from './pages/Home'
 
 function App() {
 
   return (
     <BrowserRouter>
       <Header />
+      <Routes>
+        <Route path="/" element={<LogIn />} />
+      </Routes>
+      <Routes>
+        <Route path="/home" element={<Home />} />
+      </Routes>
       <Routes>
         <Route path="/signup" element={<SignUp />} />
       </Routes>
