@@ -13,11 +13,13 @@ import {
   Divider,
   CircularProgress,
   Alert,
+  IconButton,
 } from '@mui/material';
+import { Delete, Edit } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
-import { auth, database } from '../../firebase'; 
-import { ref, push, onValue } from 'firebase/database';
+import { auth, database } from '../../firebase';
+import { ref, push, onValue, remove, update } from 'firebase/database';
 
 const categories = [
   'Food',
@@ -40,8 +42,14 @@ function ExpenseTracker() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [editData, setEditData] = useState({
+    amount: '',
+    description: '',
+    category: '',
+  });
 
-  // Check authentication on mount
+  // Check authentication and fetch expenses
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -49,23 +57,17 @@ function ExpenseTracker() {
       return;
     }
 
-    // Fetch expenses from Firebase DB for logged-in user
     const user = auth.currentUser;
     if (!user) {
-      // No user (maybe token invalid), redirect to login
       navigate('/login');
       return;
     }
-
     const expensesRef = ref(database, `expenses/${user.uid}`);
-
-    // Attach listener to fetch expenses on data change
     const unsubscribe = onValue(
       expensesRef,
       (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          // Convert object to array
           const expensesArray = Object.entries(data).map(([id, expense]) => ({
             id,
             ...expense,
@@ -81,13 +83,10 @@ function ExpenseTracker() {
         setLoading(false);
       }
     );
-
-    // Cleanup on unmount
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [navigate]);
 
+  // For add new
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -96,12 +95,23 @@ function ExpenseTracker() {
     }));
   };
 
-  // Submit expense and store in Firebase DB
+  // For editing
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Add new expense
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Basic validation
-    if (formData.amount === '' || isNaN(formData.amount) || Number(formData.amount) <= 0) {
+    if (
+      formData.amount === '' ||
+      isNaN(formData.amount) ||
+      Number(formData.amount) <= 0
+    ) {
       alert('Please enter a valid amount greater than 0.');
       return;
     }
@@ -113,27 +123,21 @@ function ExpenseTracker() {
       alert('Please select a category.');
       return;
     }
-
     const user = auth.currentUser;
     if (!user) {
       alert('User not authenticated. Please login again.');
       navigate('/login');
       return;
     }
-
     setError('');
     try {
       const expensesRef = ref(database, `expenses/${user.uid}`);
-
-      // Push a new expense node in DB
       await push(expensesRef, {
         amount: Number(formData.amount),
         description: formData.description.trim(),
         category: formData.category,
         createdAt: Date.now(),
       });
-
-      // Reset form only on success
       setFormData({
         amount: '',
         description: '',
@@ -142,6 +146,68 @@ function ExpenseTracker() {
     } catch (err) {
       console.error('Error adding expense:', err);
       setError('Failed to add expense. Please try again.');
+    }
+  };
+
+  // Delete expense
+  const handleDelete = async (expenseId) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      await remove(ref(database, `expenses/${user.uid}/${expenseId}`));
+      console.log('Expense successfully deleted');
+    } catch (error) {
+      setError('Failed to delete expense. Please try again.');
+    }
+  };
+
+  // Start editing
+  const handleEdit = (expense) => {
+    setEditId(expense.id);
+    setEditData({
+      amount: expense.amount,
+      description: expense.description,
+      category: expense.category,
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditId(null);
+    setEditData({ amount: '', description: '', category: '' });
+  };
+
+  // Save edit to Firebase
+  const handleSaveEdit = async (expenseId) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    if (
+      editData.amount === '' ||
+      isNaN(editData.amount) ||
+      Number(editData.amount) <= 0
+    ) {
+      alert('Please enter a valid amount greater than 0.');
+      return;
+    }
+    if (editData.description.trim() === '') {
+      alert('Please enter a description.');
+      return;
+    }
+    if (editData.category === '') {
+      alert('Please select a category.');
+      return;
+    }
+
+    try {
+      await update(ref(database, `expenses/${user.uid}/${expenseId}`), {
+        amount: Number(editData.amount),
+        description: editData.description.trim(),
+        category: editData.category,
+      });
+      setEditId(null);
+      setEditData({ amount: '', description: '', category: '' });
+    } catch (error) {
+      setError('Failed to update expense. Please try again.');
     }
   };
 
@@ -176,7 +242,6 @@ function ExpenseTracker() {
             required
             inputProps={{ min: '0', step: '0.01' }}
           />
-
           <TextField
             label="Description"
             name="description"
@@ -187,7 +252,6 @@ function ExpenseTracker() {
             margin="normal"
             required
           />
-
           <TextField
             label="Category"
             name="category"
@@ -204,7 +268,6 @@ function ExpenseTracker() {
               </MenuItem>
             ))}
           </TextField>
-
           <Button type="submit" variant="contained" color="primary" fullWidth sx={{ mt: 3 }}>
             Add Expense
           </Button>
@@ -222,14 +285,86 @@ function ExpenseTracker() {
         ) : (
           <List>
             {expenses
-              .sort((a, b) => b.createdAt - a.createdAt) // latest first
+              .sort((a, b) => b.createdAt - a.createdAt)
               .map((expense) => (
                 <React.Fragment key={expense.id}>
-                  <ListItem>
-                    <ListItemText
-                      primary={`${expense.description} - ₹${expense.amount.toFixed(2)}`}
-                      secondary={expense.category}
-                    />
+                  <ListItem
+                    alignItems="flex-start"
+                    secondaryAction={
+                      editId === expense.id ? null : (
+                        <>
+                          <IconButton edge="end" color="primary" onClick={() => handleEdit(expense)}>
+                            <Edit />
+                          </IconButton>
+                          <IconButton edge="end" color="error" onClick={() => handleDelete(expense.id)}>
+                            <Delete />
+                          </IconButton>
+                        </>
+                      )
+                    }
+                  >
+                    {editId === expense.id ? (
+                      <Box sx={{ width: '100%' }}>
+                        <TextField
+                          label="Money"
+                          name="amount"
+                          type="number"
+                          size="small"
+                          fullWidth
+                          sx={{ mb: 1 }}
+                          value={editData.amount}
+                          onChange={handleEditChange}
+                        />
+                        <TextField
+                          label="Description"
+                          name="description"
+                          size="small"
+                          fullWidth
+                          sx={{ mb: 1 }}
+                          value={editData.description}
+                          onChange={handleEditChange}
+                        />
+                        <TextField
+                          label="Category"
+                          name="category"
+                          select
+                          size="small"
+                          fullWidth
+                          sx={{ mb: 2 }}
+                          value={editData.category}
+                          onChange={handleEditChange}
+                        >
+                          {categories.map(cat => (
+                            <MenuItem key={cat} value={cat}>
+                              {cat}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            size="small"
+                            onClick={() => handleSaveEdit(expense.id)}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            size="small"
+                            onClick={handleCancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <ListItemText
+                        primary={`${expense.description} - ₹${expense.amount.toFixed(2)}`}
+                        secondary={expense.category}
+                      />
+                    )}
                   </ListItem>
                   <Divider component="li" />
                 </React.Fragment>
