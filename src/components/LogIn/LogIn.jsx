@@ -1,5 +1,5 @@
 // src/components/Login.jsx
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Container,
   TextField,
@@ -12,50 +12,50 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-} from '@mui/material';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../firebase';
-import { Link, useNavigate } from 'react-router-dom';
+} from "@mui/material";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../../firebase";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { login } from "../../store/Auth";
 
 function Login() {
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const dispatch = useDispatch();
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const navigate = useNavigate();
   const [errors, setErrors] = useState({});
-  const [firebaseError, setFirebaseError] = useState('');
+  const [firebaseError, setFirebaseError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState(null);
 
-  // Forgot Password dialog state
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
-  // Input validation
   const validate = () => {
     const newErrors = {};
-    if (!formData.email) newErrors.email = 'Email is required';
+    if (!formData.email) newErrors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(formData.email))
-      newErrors.email = 'Email address is invalid';
+      newErrors.email = "Email address is invalid";
 
-    if (!formData.password) newErrors.password = 'Password is required';
+    if (!formData.password) newErrors.password = "Password is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = e => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setErrors(prev => ({ ...prev, [e.target.name]: '' }));
-    setFirebaseError('');
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
+    setFirebaseError("");
   };
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    setFirebaseError('');
+    setFirebaseError("");
 
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -65,28 +65,31 @@ function Login() {
       );
 
       const user = userCredential.user;
+      // Optionally, reload user here if you want freshest emailVerified status 
+      // await user.reload();
+
       const idToken = await user.getIdToken();
 
-      localStorage.setItem('token', idToken);
-      setToken(idToken);
+      localStorage.setItem("token", idToken);
+      localStorage.setItem("userId", user.uid);
+      dispatch(login({ userId: user.uid, token: idToken }));
 
-      console.log('User logged in successfully, token stored.');
+      console.log("User logged in successfully, token stored.");
 
-      // Redirect based on email verification status
       if (user.emailVerified) {
-        navigate('/home'); // Replace '/home' with your actual dashboard/home route
+        navigate("/home");
       } else {
-        navigate('/email'); // Email verification page route
+        navigate("/email");
       }
     } catch (error) {
       console.error(error);
-      let message = 'Failed to login. Please try again.';
-      if (error.code === 'auth/user-not-found')
-        message = 'User not found. Please sign up first.';
-      else if (error.code === 'auth/wrong-password')
-        message = 'Incorrect password. Please try again.';
-      else if (error.code === 'auth/too-many-requests')
-        message = 'Too many attempts. Please try later.';
+      let message = "Failed to login. Please try again.";
+      if (error.code === "auth/user-not-found")
+        message = "User not found. Please sign up first.";
+      else if (error.code === "auth/wrong-password")
+        message = "Incorrect password. Please try again.";
+      else if (error.code === "auth/too-many-requests")
+        message = "Too many attempts. Please try later.";
       setFirebaseError(message);
     } finally {
       setLoading(false);
@@ -96,24 +99,24 @@ function Login() {
   // Forgot password handlers
   const handleForgotOpen = () => {
     setForgotOpen(true);
-    setResetEmail('');
-    setResetError('');
-    setResetSuccess('');
+    setResetEmail("");
+    setResetError("");
+    setResetSuccess("");
   };
   const handleForgotClose = () => setForgotOpen(false);
 
-  const handleResetEmailChange = e => {
+  const handleResetEmailChange = (e) => {
     setResetEmail(e.target.value);
-    setResetError('');
-    setResetSuccess('');
+    setResetError("");
+    setResetSuccess("");
   };
 
-  const handleResetSubmit = async e => {
+  const handleResetSubmit = async (e) => {
     e.preventDefault();
-    setResetError('');
-    setResetSuccess('');
+    setResetError("");
+    setResetSuccess("");
     if (!resetEmail || !/\S+@\S+\.\S+/.test(resetEmail)) {
-      setResetError('Please enter a valid email address.');
+      setResetError("Please enter a valid email address.");
       return;
     }
 
@@ -121,35 +124,20 @@ function Login() {
     try {
       await sendPasswordResetEmail(auth, resetEmail);
       setResetSuccess(
-        'If an account with this email exists, a password reset link has been sent. Please check your inbox.'
+        "If an account with this email exists, a password reset link has been sent. Please check your inbox."
       );
     } catch (error) {
-      let msg = 'Failed to send password reset email.';
-      if (error.code === 'auth/user-not-found')
-        msg = 'No user found with this email. Please check your email address.';
-      else if (error.code === 'auth/too-many-requests')
-        msg = 'Too many requests. Please try again later.';
-      else if (error.code === 'auth/invalid-email')
-        msg = 'Invalid email address.';
+      let msg = "Failed to send password reset email.";
+      if (error.code === "auth/user-not-found")
+        msg = "No user found with this email. Please check your email address.";
+      else if (error.code === "auth/too-many-requests")
+        msg = "Too many requests. Please try again later.";
+      else if (error.code === "auth/invalid-email") msg = "Invalid email address.";
       setResetError(msg);
     } finally {
       setResetLoading(false);
     }
   };
-
-  // If logged in, show a simple welcome message (optional)
-  if (token) {
-    return (
-      <Container maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Welcome to Expense Tracker
-        </Typography>
-        <Typography variant="body1">
-          You have successfully logged in.
-        </Typography>
-      </Container>
-    );
-  }
 
   const isSubmitDisabled = !formData.email || !formData.password;
 
@@ -160,7 +148,7 @@ function Login() {
           p: 4,
           boxShadow: 3,
           borderRadius: 2,
-          backgroundColor: 'background.paper',
+          backgroundColor: "background.paper",
         }}
       >
         <Typography variant="h5" component="h1" gutterBottom align="center">
@@ -208,12 +196,12 @@ function Login() {
             sx={{ mt: 3 }}
             disabled={loading || isSubmitDisabled}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Login'}
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Login"}
           </Button>
 
           <Typography variant="body2" align="center" sx={{ mt: 2 }}>
-            Don't have an account?{' '}
-            <Link to="/signup" style={{ color: '#4FC3F7', textDecoration: 'underline' }}>
+            Don't have an account?{" "}
+            <Link to="/signup" style={{ color: "#4FC3F7", textDecoration: "underline" }}>
               Create New Account
             </Link>
           </Typography>
@@ -221,7 +209,7 @@ function Login() {
           <Typography
             variant="body2"
             align="center"
-            sx={{ mt: 2, color: '#4FC3F7', cursor: 'pointer', textDecoration: 'underline' }}
+            sx={{ mt: 2, color: "#4FC3F7", cursor: "pointer", textDecoration: "underline" }}
             onClick={handleForgotOpen}
           >
             Forgot Password?
@@ -266,7 +254,7 @@ function Login() {
             color="primary"
             disabled={resetLoading || !resetEmail}
           >
-            {resetLoading ? <CircularProgress size={24} color="inherit" /> : 'Send Reset Link'}
+            {resetLoading ? <CircularProgress size={24} color="inherit" /> : "Send Reset Link"}
           </Button>
         </DialogActions>
       </Dialog>
