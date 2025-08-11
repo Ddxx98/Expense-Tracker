@@ -1,112 +1,96 @@
 import React, { useState, useEffect } from "react";
 import { Button, Alert, Typography } from "@mui/material";
-import { auth } from "../../firebase";
-import { sendEmailVerification, reload } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import axios from "axios";
+import { verifyEmailAsync } from "../../store/Auth";
+
+const API_KEY = "AIzaSyCN82e4ls26Z0UrYCNkCoV3bjgs1f_Xpj8"
+const SEND_VERIFY = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${API_KEY}`;
+const LOOKUP = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${API_KEY}`;
 
 function EmailVerificationBanner() {
+  const dispatch = useDispatch();
+  const { userId, token, isVerified } = useSelector((state) => state.auth);
   const navigate = useNavigate();
-  const [user, setUser] = useState(auth.currentUser);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Update user state on mount and when auth state changes (optional)
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Check if user exists and is verified right away
-  useEffect(() => {
-    if (user && user.emailVerified) {
-      // Navigate to /home if verified already
-      navigate("/home");
-    }
-  }, [user, navigate]);
-
-  // Function to reload user and update verification status
   const checkVerificationStatus = async () => {
-    if (!user) return;
+    if (!token) return false;
     setLoading(true);
     setError("");
     setStatus("");
     try {
-      await reload(user);
-      const refreshedUser = auth.currentUser;
-      setUser(refreshedUser);
-
-      if (refreshedUser.emailVerified) {
+      const response = await axios.post(LOOKUP, { idToken: token });
+      const userData = response.data.users?.[0];
+      if (!userData) throw new Error("No user data found.");
+      const verified = userData.emailVerified;
+      if (verified) {
         setStatus("Your email is now verified!");
         setSent(false);
-        // Navigate after small delay so user can see message
-        setTimeout(() => {
-          navigate("/home");
-        }, 1500);
+        dispatch(verifyEmailAsync(token));
+        navigate("/home");
       } else {
         setStatus("Your email is still not verified. Please check your inbox.");
       }
+      return verified;
     } catch (err) {
-      let friendly = "Failed to check verification status.";
-      if (err.code === "auth/user-token-expired" || err.code === "auth/invalid-user-token") {
-        friendly = "Session expired. Please log in again.";
-      } else if (err.message) {
-        friendly = err.message;
-      }
-      setError(friendly);
+      setError(
+        err.response?.data?.error?.message ||
+          err.message ||
+          "Failed to check verification status."
+      );
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerify = async () => {
-    if (!user) return;
+    if (!token || !userId) return;
     setLoading(true);
     setError("");
     setStatus("");
     try {
-      // Reload before sending to ensure latest state
-      await reload(user);
-
-      if (auth.currentUser.emailVerified) {
+      const verified = await checkVerificationStatus();
+      if (verified) {
         setStatus("Your email is already verified!");
-        setSent(false);
-        // Navigate immediately
         navigate("/home");
         return;
       }
-
-      await sendEmailVerification(user);
+      await axios.post(SEND_VERIFY, {
+        requestType: "VERIFY_EMAIL",
+        idToken: token,
+      });
       setSent(true);
-      setStatus("Verification email sent! Please check your inbox and follow the instructions.");
+      setStatus("Verification email sent! Please check your inbox.");
     } catch (err) {
-      let friendly = "Something went wrong. Try again later.";
-      if (err.code === "auth/too-many-requests") {
-        friendly = "Too many requests. Please wait before trying again.";
-      } else if (err.code === "auth/user-not-found") {
-        friendly = "User not found. Please login again.";
-      } else if (err.code === "auth/invalid-recipient-email") {
-        friendly = "Invalid email address.";
-      } else if (err.message) {
-        friendly = err.message;
-      }
-      setError(friendly);
+      setError(
+        err.response?.data?.error?.message ||
+          err.message ||
+          "Something went wrong. Try again later."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  if (!user || user.emailVerified) return null;
+  useEffect(() => {
+    if (token && userId) {
+      checkVerificationStatus();
+    }
+  }, [token, userId, isVerified]); // Only when token/userId changes
+
+  if (!token || !userId) return null;
 
   return (
     <div style={{ margin: "24px 0" }}>
       <Alert severity="info" sx={{ mb: 2 }}>
         Your email is not verified. Please verify to access all features.
       </Alert>
-
       <Button
         variant="contained"
         color="primary"
@@ -116,7 +100,6 @@ function EmailVerificationBanner() {
       >
         {loading ? "Sending..." : sent ? "Sent!" : "Send Verification Email"}
       </Button>
-
       <Button
         variant="outlined"
         color="primary"
@@ -126,7 +109,6 @@ function EmailVerificationBanner() {
       >
         {loading ? "Checking..." : "Check Verification Status"}
       </Button>
-
       {status && (
         <Typography color="primary" sx={{ mt: 2 }}>
           {status}

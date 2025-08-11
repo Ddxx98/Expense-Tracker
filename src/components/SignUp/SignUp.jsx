@@ -8,8 +8,9 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { auth, createUserWithEmailAndPassword } from '../../firebase';
 import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { signupAsync } from '../../store/Auth';
 
 function SignUp() {
   const [formData, setFormData] = useState({
@@ -18,13 +19,13 @@ function SignUp() {
     confirmPassword: '',
   });
 
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const [errors, setErrors] = useState({});
   const [firebaseError, setFirebaseError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
-  // Validate inputs before submit
   const validate = () => {
     const newErrors = {};
     if (!formData.email) newErrors.email = 'Email is required';
@@ -55,24 +56,16 @@ function SignUp() {
 
     if (!validate()) return;
 
-    setLoading(true);
-    setFirebaseError('');
-
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-      console.log('User has successfully signed up', userCredential.user);
-
-      navigate('/email');
-
+      await dispatch(signupAsync({
+        email: formData.email,
+        password: formData.password
+      })).unwrap();
+      
+      console.log('User has successfully signed up');
+      navigate('/verify');
     } catch (error) {
-      console.error(error);
-      setFirebaseError(error.message || 'Failed to sign up');
-    } finally {
-      setLoading(false);
+      setFirebaseError(error);
     }
   };
 

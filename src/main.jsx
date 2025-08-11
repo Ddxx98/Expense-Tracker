@@ -21,14 +21,36 @@ const darkTheme = createTheme({
     background: { default: '#121212', paper: '#1d1d1d' },
     text: {
       primary: '#fff',
-      secondary: '#bbb', 
+      secondary: '#bbb',
+    },
+  },
+});
+
+const premiumDarkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: '#90caf9', contrastText: '#000' },
+    background: { default: '#000000', paper: '#121212' },
+    text: {
+      primary: '#fff',
+      secondary: '#999',
     },
   },
 });
 
 function ThemeWrapper() {
   const mode = useSelector((state) => state.theme.mode);
-  const theme = mode === 'dark' ? darkTheme : lightTheme;
+  const premiumActivated = useSelector((state) => state.expense.premiumActivated);
+  
+  let theme;
+  if (premiumActivated && mode === 'dark') {
+    theme = premiumDarkTheme;
+  } else if (mode === 'dark') {
+    theme = darkTheme;
+  } else {
+    theme = lightTheme;
+  }
+  
   return (
     <ThemeProvider theme={theme}>
       <App/>

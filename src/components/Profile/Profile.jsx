@@ -9,11 +9,18 @@ import {
   Avatar,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { auth } from "../../firebase";
-import { updateProfile, reload } from "firebase/auth";
+import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
+import { updateProfileAsync } from "../../store/Auth";
+
+const API_KEY = "AIzaSyCN82e4ls26Z0UrYCNkCoV3bjgs1f_Xpj8";
+const AUTH_BASE_URL = `https://identitytoolkit.googleapis.com/v1/accounts`;
 
 function Profile() {
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { token } = useSelector((state) => state.auth);
+  
   const [form, setForm] = useState({
     username: "",
     photoURL: "",
@@ -25,29 +32,37 @@ function Profile() {
 
   useEffect(() => {
     async function fetchUserProfile() {
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+      
       try {
-        // Reload to get the latest user info, useful after refresh 
-        await reload(auth.currentUser);
-
-        const user = auth.currentUser;
-        if (user) {
+        // Get user info from Firebase
+        const response = await axios.post(
+          `${AUTH_BASE_URL}:lookup?key=${API_KEY}`,
+          { idToken: token }
+        );
+        
+        const userData = response.data.users?.[0];
+        if (userData) {
           setForm({
-            username: user.displayName || "",
-            photoURL: user.photoURL || "",
+            username: userData.displayName || "",
+            photoURL: userData.photoUrl || "",
           });
         } else {
           // User is not logged in, redirect to login page
           navigate("/login");
         }
-      } catch (err) {
-        setError("Failed to load user data.");
+      } catch (error) {
+        setError(error.message || "Failed to load user data.");
       } finally {
         setLoadingUser(false);
       }
     }
 
     fetchUserProfile();
-  }, [navigate]);
+  }, [token, navigate]);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -57,18 +72,24 @@ function Profile() {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+    if (!token) {
+      setError("User not authenticated.");
+      return;
+    }
+    
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      await updateProfile(auth.currentUser, {
+      await dispatch(updateProfileAsync({
         displayName: form.username,
         photoURL: form.photoURL,
-      });
+        token
+      })).unwrap();
       setSuccess("Profile updated successfully!");
     } catch (err) {
-      setError(err.message || "Failed to update profile.");
+      setError(err || "Failed to update profile.");
     } finally {
       setLoading(false);
     }

@@ -9,13 +9,10 @@ import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
-  addExpense, updateExpense, deleteExpense, setExpenses, activatePremium
+  fetchExpensesAsync, addExpenseAsync, updateExpenseAsync, deleteExpenseAsync, activatePremium
 } from '../../store/Expense';
 
 import { setDarkTheme, toggleTheme } from '../../store/Theme';
-
-import { database } from '../../firebase';
-import { ref, push, onValue, remove, update } from 'firebase/database';
 
 import { formatINRCurrency } from '../../utils/formatCurrency';
 
@@ -26,10 +23,12 @@ const categories = [
 function ExpenseTracker() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  
+
   const expenses = useSelector(state => state.expense.expenses);
   const premiumActivated = useSelector(state => state.expense.premiumActivated);
   const themeMode = useSelector(state => state.theme.mode);
+
+  const { userId, token } = useSelector(state => state.auth);
 
   const [formData, setFormData] = useState({ amount: '', description: '', category: '' });
   const [editId, setEditId] = useState(null);
@@ -38,33 +37,26 @@ function ExpenseTracker() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Load expenses from Firebase and keep synced
+  // Load expenses using REST API
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-
     if (!token || !userId) {
       navigate('/login');
       return;
     }
 
-    const expensesRef = ref(database, `expenses/${userId}`);
-    const unsubscribe = onValue(expensesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const expensesArr = Object.entries(data).map(([id, expense]) => ({ id, ...expense }));
-        dispatch(setExpenses(expensesArr));
-      } else {
-        dispatch(setExpenses([]));
+    const fetchExpenses = async () => {
+      try {
+        await dispatch(fetchExpensesAsync({ userId, token })).unwrap();
+      } catch (error) {
+        setError(error || 'Failed to load expenses.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, (err) => {
-      setError('Failed to load expenses.');
-      setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [dispatch, navigate]);
+    fetchExpenses();
+    // Optionally: setInterval for live sync
+  }, [dispatch, navigate, token, userId]);
 
   // Round number to 2 decimals helper
   const roundToTwo = (num) => Number(Number(num).toFixed(2));
@@ -80,7 +72,7 @@ function ExpenseTracker() {
     setEditData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Add new expense
+  // Add expense (POST)
   const handleSubmit = async e => {
     e.preventDefault();
 
@@ -98,8 +90,7 @@ function ExpenseTracker() {
       return;
     }
 
-    const userId = localStorage.getItem('userId');
-    if (!userId) {
+    if (!userId || !token) {
       alert('User session expired. Please login again.');
       navigate('/login');
       return;
@@ -107,29 +98,27 @@ function ExpenseTracker() {
 
     setError('');
     try {
-      const expensesRef = ref(database, `expenses/${userId}`);
-      await push(expensesRef, {
+      const expenseData = {
         amount: roundToTwo(amount),
         description: description.trim(),
         category,
         createdAt: Date.now(),
-      });
+      };
+      
+      await dispatch(addExpenseAsync({ expenseData, userId, token })).unwrap();
       setFormData({ amount: '', description: '', category: '' });
-    } catch (err) {
-      setError('Failed to add expense. Please try again.');
+    } catch (error) {
+      setError(error || 'Failed to add expense. Please try again.');
     }
   };
 
-  // Delete expense
+  // Delete expense (DELETE)
   const handleDelete = async id => {
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
+    if (!userId || !token) return;
     try {
-      await remove(ref(database, `expenses/${userId}/${id}`));
-      dispatch(deleteExpense(id));
-      console.log('Expense successfully deleted');
-    } catch {
-      setError('Failed to delete expense. Please try again.');
+      await dispatch(deleteExpenseAsync({ id, userId, token })).unwrap();
+    } catch (error) {
+      setError(error || 'Failed to delete expense. Please try again.');
     }
   };
 
@@ -149,7 +138,7 @@ function ExpenseTracker() {
     setEditData({ amount: '', description: '', category: '' });
   };
 
-  // Save edit
+  // Save edit (PATCH)
   const handleSave = async id => {
     const { amount, description, category } = editData;
     if (!amount || isNaN(amount) || Number(amount) <= 0) {
@@ -164,21 +153,21 @@ function ExpenseTracker() {
       alert('Please select a category.');
       return;
     }
-    const userId = localStorage.getItem('userId');
-    if (!userId) return;
+    if (!userId || !token) return;
 
     setError('');
     try {
-      await update(ref(database, `expenses/${userId}/${id}`), {
+      const expenseData = {
         amount: roundToTwo(amount),
         description: description.trim(),
         category,
-      });
-      dispatch(updateExpense({ id, amount: roundToTwo(amount), description: description.trim(), category }));
+      };
+      
+      await dispatch(updateExpenseAsync({ id, expenseData, userId, token })).unwrap();
       setEditId(null);
       setEditData({ amount: '', description: '', category: '' });
-    } catch {
-      setError('Failed to update expense. Please try again.');
+    } catch (error) {
+      setError(error || 'Failed to update expense. Please try again.');
     }
   };
 
@@ -215,7 +204,7 @@ function ExpenseTracker() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.href = encodedUri;
-    link.download = `expenses_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `expenses_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -287,12 +276,12 @@ function ExpenseTracker() {
         <Button variant="outlined" onClick={downloadCsv}>Download CSV</Button>
       </Paper>
 
-      <List>
+      <List sx={{ bgcolor: 'background.paper' }}>
         {expenses.length === 0
-          ? <Typography color="text.secondary">No expenses recorded yet.</Typography>
+          ? <Paper sx={{ p: 2, bgcolor: 'background.paper' }}><Typography color="text.secondary">No expenses recorded yet.</Typography></Paper>
           : [...expenses].sort((a, b) => b.createdAt - a.createdAt).map(expense => (
             <React.Fragment key={expense.id}>
-              <ListItem alignItems="flex-start" 
+              <ListItem alignItems="flex-start" sx={{ bgcolor: 'background.paper' }}
                 secondaryAction={
                   editId === expense.id ? null : (
                     <>
@@ -307,7 +296,7 @@ function ExpenseTracker() {
                 }
               >
                 {editId === expense.id ? (
-                  <Box sx={{ width: '100%' }}>
+                  <Box sx={{ width: '100%', bgcolor: 'background.paper', p: 2 }}>
                     <TextField label="Money"
                       name="amount"
                       type="number"
@@ -344,8 +333,8 @@ function ExpenseTracker() {
                     </Box>
                   </Box>
                 ) : (
-                  <ListItemText 
-                    primary={`${expense.description} — ${formatINRCurrency(expense.amount)}`} 
+                  <ListItemText
+                    primary={<Typography color="text.primary">{`${expense.description} — ${formatINRCurrency(expense.amount)}`}</Typography>}
                     secondary={<Typography color="text.secondary">{expense.category}</Typography>}
                   />
                 )}

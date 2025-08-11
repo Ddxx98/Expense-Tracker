@@ -13,11 +13,9 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "../../firebase";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { login } from "../../store/Auth";
+import { loginAsync, sendPasswordResetEmailAsync } from "../../store/Auth";
 
 function Login() {
   const dispatch = useDispatch();
@@ -25,7 +23,7 @@ function Login() {
   const navigate = useNavigate();
   const [errors, setErrors] = useState({});
   const [firebaseError, setFirebaseError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -54,49 +52,24 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    setLoading(true);
-    setFirebaseError("");
-
+    
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-
-      const user = userCredential.user;
-      // Optionally, reload user here if you want freshest emailVerified status 
-      // await user.reload();
-
-      const idToken = await user.getIdToken();
-
-      localStorage.setItem("token", idToken);
-      localStorage.setItem("userId", user.uid);
-      dispatch(login({ userId: user.uid, token: idToken }));
-
-      console.log("User logged in successfully, token stored.");
-
-      if (user.emailVerified) {
+      const result = await dispatch(loginAsync({
+        email: formData.email,
+        password: formData.password
+      }));
+      
+      // Redirect based on verification status
+      if (result.payload.isVerified) {
         navigate("/home");
       } else {
-        navigate("/email");
+        navigate("/verify");
       }
     } catch (error) {
-      console.error(error);
-      let message = "Failed to login. Please try again.";
-      if (error.code === "auth/user-not-found")
-        message = "User not found. Please sign up first.";
-      else if (error.code === "auth/wrong-password")
-        message = "Incorrect password. Please try again.";
-      else if (error.code === "auth/too-many-requests")
-        message = "Too many attempts. Please try later.";
-      setFirebaseError(message);
-    } finally {
-      setLoading(false);
+      setFirebaseError(error);
     }
   };
 
-  // Forgot password handlers
   const handleForgotOpen = () => {
     setForgotOpen(true);
     setResetEmail("");
@@ -122,7 +95,7 @@ function Login() {
 
     setResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
+      await dispatch(sendPasswordResetEmailAsync(resetEmail)).unwrap();
       setResetSuccess(
         "If an account with this email exists, a password reset link has been sent. Please check your inbox."
       );

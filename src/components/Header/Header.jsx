@@ -1,33 +1,25 @@
 // src/components/Header.jsx
-import React, { useEffect } from "react";
+import React from "react";
 import { AppBar, Toolbar, Typography, Button, Box } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
-import { signOut, getAuth } from "firebase/auth";
-import { logout, login } from "../../store/Auth";
+import { logout } from "../../store/Auth";
 import { useDispatch, useSelector } from "react-redux";
+import { setLightTheme } from "../../store/Theme";
 
 function Header() {
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
   const navigate = useNavigate();
-  const auth = getAuth();
 
-  useEffect(() => {
-    // Initialize auth state from localStorage on mount
-    const tokenStored = localStorage.getItem("token");
-    const userIdStored = localStorage.getItem("userId");
-    if (tokenStored) {
-      dispatch(login({ userId: userIdStored, token: tokenStored }));
-    }
-  }, [dispatch]);
 
   const handleAuthAction = async () => {
     if (isAuthenticated) {
       try {
-        await signOut(auth);
-        dispatch(logout());
         localStorage.removeItem("userId");
         localStorage.removeItem("token");
+        localStorage.removeItem("themeMode")
+        dispatch(logout());
+        dispatch(setLightTheme());
         navigate("/login");
       } catch (error) {
         alert("Logout failed: " + error.message);
@@ -50,9 +42,11 @@ function Header() {
           <Button color="inherit" component={Link} to="/">
             Home
           </Button>
-          <Button color="inherit" component={Link} to="/products">
-            Products
-          </Button>
+          {isAuthenticated && (
+            <Button color="inherit" component={Link} to="/profile">
+              Profile
+            </Button>
+          )}
           <Button color="inherit" component={Link} to="/about">
             About Us
           </Button>
